@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 
 class User:
 	'''Represents a user in our app. The class will save the following 

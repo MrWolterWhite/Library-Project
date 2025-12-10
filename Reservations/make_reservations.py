@@ -1,5 +1,5 @@
 import threading
-import datetime
+from datetime import datetime
 from DB.objects import *
 from DB.database_interface import *
 #every other necessary import

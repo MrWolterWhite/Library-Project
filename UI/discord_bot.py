@@ -1,7 +1,7 @@
-import datetime
+from datetime import datetime
 from DB.objects import *
 from DB.database_interface import *
-from md_styling import *
+from UI.md_styling import *
 
 import discord
 from discord.ext import commands
@@ -35,7 +35,7 @@ def add_reservation(discord_id: str = "", room: Room = Room(), start_time: datet
 	- Add this reservation to the owner's object
 	- Add this reservation to the owner in the Users DB'''
 	  
-	reservation = Reservation("", room, None, database.load_user(discord_id), start_time, duration, tuple()) #Create the Reservation object
+	reservation = Reservation("", room, None, app_database.load_user(discord_id), start_time, duration, tuple()) #Create the Reservation object
 	  
 	owner_user = app_database.find_owner(reservation, 
 		myself = app_database.load_user(reservation.who_reserved),
