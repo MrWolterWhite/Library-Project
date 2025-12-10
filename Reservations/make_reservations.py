@@ -1,7 +1,7 @@
 import threading
 from datetime import datetime
 from DB.objects import *
-from DB.database_interface import *
+from DB.sql_database import *
 #every other necessary import
 
 database = Database()

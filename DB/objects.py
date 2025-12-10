@@ -3,11 +3,11 @@ from datetime import datetime
 class User:
 	'''Represents a user in our app. The class will save the following 
 	attributes for each user: username, password, discord_id, user_id and 
-	week_window_reservations, which is a list that saves the reservations made 
+	week_window_reservations, which is a list that saves the ids of the reservations made 
 	in the window of [now - week, now + week]'''
 
 	def __init__(self, user_id: str = "", username: str = "", password: str = 
-		"", discord_id: str = "", week_window_reservations: list['Reservation'] = list()):
+		"", discord_id: str = "", week_window_reservations_ids: list[str] = list()):
 		...
 		
 	def is_legal_order(self, reservation: 'Reservation') -> bool:
