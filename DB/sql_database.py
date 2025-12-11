@@ -1,8 +1,8 @@
 from DB.database_interface import *
 import sqlite3
 import json
-
-RESERVATION_INIT_STATUS = (0,0)
+import random
+import time
 
 class SQLDatabase(Database):
 
@@ -41,8 +41,8 @@ class SQLDatabase(Database):
 					Room TEXT,
 					OwnerUserID VARCHAR(50),
 					ReserverUserID VARCHAR(50),
-					StartTime INT
-					Duration INT
+					StartTime INT,
+					Duration INT,
 					Status TEXT
 				);
 			"""
@@ -107,11 +107,48 @@ class SQLDatabase(Database):
 		'''fetches the reservations that are relevant for a certain time (and 
 		the window of an hour forward)'''
 		...
+
+	def is_same_day(date1: datetime, date2: datetime):
+		if date1.day == date2.day and date1.month == date2.month and date1.year == date2.year:
+			return True
+		return False
 	
-	def add_reservation(self, res_id: str = "", room_name: str = "", owner_userid: str = "", reserver_userid: str = "", date: datetime = datetime(1970, 1, 1), duration: int = 0) -> str:
+	def is_at_least_X_days_apart(date1: datetime, date2: datetime, x: int):
+		return ((date1.timestamp() - date2.timestamp()) >= 60*60*24*x)
+
+	def is_legal_order(self, user: User, reservation: Reservation) -> bool:
+		'''Returns if "user" is able to order the reservation on his name.
+		A user can always reserve a room unless 
+		
+		- The reservation is for a time in the past
+		- Someone already reserved it
+		- The user already reserved a room in the same day
+		- The user wants to make 3+ reservations in a window of a week'''
+		if reservation.owner is not None or not SQLDatabase.is_at_least_X_days_apart(reservation.start_time, datetime.now(), 0):
+			return False
+		user_reservations = self.load_reservations_of_user(user.user_id)
+		for user_reservation in user_reservations:
+			user_reservation_day = datetime.date(user_reservation.start_time)
+			reservation_day = datetime.date(reservation.start_time)
+			if SQLDatabase.is_same_day(user_reservation_day, reservation_day):
+				return False
+		week_window_counter = 0
+		for user_reservation in user_reservations:
+			if not SQLDatabase.is_at_least_X_days_apart(reservation.start_time, user_reservation.start_time, 7) or not SQLDatabase.is_at_least_X_days_apart(user_reservation.start_time, reservation.start_time, 7):
+				week_window_counter += 1
+		for user_reservation in user_reservations:
+			if SQLDatabase.is_at_least_X_days_apart(datetime.now(), user_reservation.start_time , 7):
+				self.delete_reservation(user_reservation)
+		if week_window_counter >= 2:
+			return False
+		return True
+
+
+	
+	def add_reservation(self, res_id: str = "", room_name: str = "", owner_userid: str = "", reserver_userid: str = "", date: datetime = datetime(1970, 1, 1), duration: int = 0, status: tuple = tuple()) -> str:
 		'''Gets attributes of a reservation and adds it to the database'''
 		date_to_int = int(date.timestamp())
-		self.cursor.execute("INSERT INTO RESERVATIONS VALUES (?, ?, ?, ?, ?, ?, ?);",(res_id, room_name, owner_userid, reserver_userid, date_to_int, duration, RESERVATION_INIT_STATUS))
+		self.cursor.execute("INSERT INTO RESERVATIONS VALUES (?, ?, ?, ?, ?, ?, ?);",(res_id, room_name, owner_userid, reserver_userid, date_to_int, duration, json.dumps(status)))
 		self.conn.commit()
 	
 	def add_user(self, username: str = "", password: str = "", discord_id: str = 
@@ -136,7 +173,9 @@ class SQLDatabase(Database):
 		
 	def choose_potential_owner(self):
 		'''Chooses a potential owner, i.e random choice'''
-		...
+		users = self.load_users()
+		chosen_index = random.randint(0,len(users)-1)
+		return users[chosen_index]
 		
 	def find_owner(self, reservation: Reservation = Reservation(), myself: User 
 	= User(), prioritize_myself: bool = True) -> User:
@@ -151,7 +190,7 @@ class SQLDatabase(Database):
 		if reservation.owner is not None:
 			return reservation.owner
 		
-		if prioritize_myself and myself.is_legal_order(reservation):
+		if prioritize_myself and self.is_legal_order(myself, reservation):
 			return myself
 		is_legal = False
 		user = User()
@@ -161,7 +200,7 @@ class SQLDatabase(Database):
 		
 		while not is_legal and counter < TRIES:
 			user = self.choose_potential_owner()
-			is_legal = user.is_legal_order(reservation)
+			is_legal = self.is_legal_order(user, reservation)
 			counter += 1
 		
 		if is_legal:

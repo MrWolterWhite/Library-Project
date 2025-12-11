@@ -11,6 +11,7 @@ import asyncio
 import os
 
 PRIORITIZE_MYSELF = True
+RESERVATION_INIT_STATUS = (0,0)
 
 # Your bot token from the developer portal
 load_dotenv()
@@ -38,20 +39,21 @@ with SQLDatabase("library.db") as app_database:
         - Add this reservation to the owner's object
         - Add this reservation to the owner in the Users DB'''
         
-        reservation = Reservation("", room, None, app_database.load_user(discord_id), start_time, duration, tuple()) #Create the Reservation object
+        reservation: Reservation = Reservation(None, room, None, app_database.load_user(discord_id), start_time, duration, tuple()) #Create the Reservation object
         
         owner_user = app_database.find_owner(reservation, 
-            myself = app_database.load_user(reservation.who_reserved),
+            myself = reservation.who_reserved,
             prioritize_myself = PRIORITIZE_MYSELF)
             
         if owner_user is None:
-            send_to_user("Couldn't make reservation") #Maybe add a description
+            # send_to_user("Couldn't make reservation") #Maybe add a description
             return
             
         reservation.owner = owner_user
+        print(f"Owner is {reservation.owner.username}")
         
         #Update the database
-        ...
+        app_database.add_reservation(reservation.reservation_id, room.room_name, owner_user.user_id, reservation.who_reserved.user_id, start_time, duration, RESERVATION_INIT_STATUS)
         
     def my_reservations(discord_id: str = ""):
         '''Outputs all of the user's reservations'''
@@ -115,13 +117,60 @@ with SQLDatabase("library.db") as app_database:
             add_me(username, password, ctx.author.id)
         except Exception as e:
             await ctx.send("Something went wrong! try again in a few moments..")
-            print(f"Exception in bot.py, line 75: {e}")
+            print(f"Exception in discord_bot.py, line 118: {e}")
         else:
             await ctx.send(bold("User added/modified successfully!"))
         
 
     @bot.command()
-    async def reserve(ctx, room_name: str = "", owner: str = "", reservation_date: str = "", duration: str = ""):
-        add_reservation(room_name, owner, reservation_date, duration)
+    async def reserve(ctx):
+        #TODO: Add checks for the inputs
+        room_name = ""
+        start_time = datetime(1970, 1, 1)
+        duration = 0
+
+        await ctx.send(bold("What Room do you want to Reserve?"))
+                    
+        def check(m):
+            return m.author == ctx.author and m.channel == ctx.channel
+
+        try:
+            room_msg = await bot.wait_for('message', check=check, timeout=300.0)
+            await ctx.send(bold("When do you want to reserve it? (DD/MM/YYYY HH:MM, MM == 0 only)"))
+        except asyncio.TimeoutError:
+            await ctx.send("You took too long to respond!")
+            return
+        
+        try:
+            starttime_msg = await bot.wait_for('message', check=check, timeout=300.0)
+            await ctx.send(bold("How many hours do you want to reserve the room for?"))
+        except asyncio.TimeoutError:
+            await ctx.send("You took too long to respond!")
+            return
+        
+        try:
+            duration_msg = await bot.wait_for('message', check=check, timeout=300.0)
+        except asyncio.TimeoutError:
+            await ctx.send("You took too long to respond!")
+            return
+        
+        room_name = room_msg.content
+        room = Room(room_name)
+        date_part, time_part = starttime_msg.content.split(" ")[:2]
+        day, month, year = date_part.split("/")
+        day = int(day)
+        month = int(month)
+        year = int(year)
+        hour = int(time_part.split(":")[0])
+        start_time = datetime(year, month, day, hour)
+        duration = int(duration_msg.content)
+        
+        try:
+            add_reservation(ctx.author.id, room, start_time, duration)
+        except Exception as e:
+            await ctx.send("Something went wrong! try again in a few moments..")
+            print(f"Exception in bot.py, line 170: {e}")
+        else:
+            await ctx.send(bold("Reservation added successfully!"))
 
     bot.run(TOKEN)
