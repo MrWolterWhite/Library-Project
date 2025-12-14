@@ -102,11 +102,20 @@ class SQLDatabase(Database):
 			reservation = Reservation(reservation_id, room, owner, reserver, start_time, duration, status)
 			reservations.append(reservation)
 		return reservations
+	
+	def is_at_most_X_hours_apart(date1: datetime, date2: datetime, x: int):
+		return ((date1.timestamp() - date2.timestamp()) >= 60*60*x)
 		
 	def load_reservations_of_batch(self, start_time: datetime = datetime(1970, 1, 1)) -> list[Reservation]:
 		'''fetches the reservations that are relevant for a certain time (and 
 		the window of an hour forward)'''
-		...
+		all_reservations: list[Reservation] = self.load_reservations()
+		batch_reservations: list[Reservation] = []
+		for reservation in all_reservations:
+			if SQLDatabase.is_at_most_X_hours_apart(reservation.start_time, start_time, reservation.duration-1) and SQLDatabase.is_at_least_X_days_apart(reservation.start_time, start_time, 0):
+				batch_reservations.append(reservation)
+		return batch_reservations
+			
 
 	def is_same_day(date1: datetime, date2: datetime):
 		if date1.day == date2.day and date1.month == date2.month and date1.year == date2.year:
