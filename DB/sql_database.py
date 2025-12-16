@@ -37,7 +37,7 @@ class SQLDatabase(Database):
 		if not SQLDatabase.is_table_exist(self.cursor, "RESERVATIONS"):
 			table_creation_query = """
 				CREATE TABLE RESERVATIONS (
-					ReservationID VARCHAR(10) PRIMARY KEY,
+					ReservationID VARCHAR(50) PRIMARY KEY,
 					Room TEXT,
 					OwnerUserID VARCHAR(50),
 					ReserverUserID VARCHAR(50),
@@ -112,7 +112,7 @@ class SQLDatabase(Database):
 		all_reservations: list[Reservation] = self.load_reservations()
 		batch_reservations: list[Reservation] = []
 		for reservation in all_reservations:
-			if SQLDatabase.is_at_most_X_hours_apart(reservation.start_time, start_time, reservation.duration-1) and SQLDatabase.is_at_least_X_days_apart(reservation.start_time, start_time, 0):
+			if SQLDatabase.is_at_most_X_hours_apart(reservation.start_time, start_time, reservation.duration) and SQLDatabase.is_at_least_X_days_apart(reservation.start_time, start_time, 0):
 				batch_reservations.append(reservation)
 		return batch_reservations
 			
@@ -133,7 +133,7 @@ class SQLDatabase(Database):
 		- Someone already reserved it
 		- The user already reserved a room in the same day
 		- The user wants to make 3+ reservations in a window of a week'''
-		if reservation.owner is not None or not SQLDatabase.is_at_least_X_days_apart(reservation.start_time, datetime.now(), 0):
+		if reservation.owner is not None or not SQLDatabase.is_at_least_X_days_apart(reservation.start_time, datetime.now(), -1/24):
 			return False
 		user_reservations = self.load_reservations_of_user(user.user_id)
 		for user_reservation in user_reservations:
@@ -168,11 +168,15 @@ class SQLDatabase(Database):
 		self.cursor.execute("INSERT INTO USERS VALUES (?, ?, ?,?,?);",(user_id, username, password, discord_id, json.dumps(reservations_ids)))
 		self.conn.commit()
 		
-	
-	def update_reservation(self, res_id: str = "", room_name: str = "", owner: 
-	str = "", date: datetime = datetime(1970, 1, 1), duration: int = 0, 
-		hours_already_reserved: int = 0):
-		...
+	def make_new_reservation_id(self, reservation: Reservation):
+		return f"INIT{reservation.owner.user_id}{reservation.start_time.date().strftime('%Y.%m.%d')}"
+
+	def update_reservation(self, reservation: Reservation):
+		self.cursor.execute("UPDATE RESERVATIONS SET Room = ?, OwnerUserID = ?, ReserverUserID = ?, StartTime = ?, Duration = ?, Status = ? WHERE ReservationID = ?;",(reservation.room.room_name, reservation.owner.user_id, reservation.who_reserved.user_id, int(reservation.start_time.timestamp()), reservation.duration, json.dumps(reservation.status), reservation.reservation_id))
+		self.conn.commit()
+		self.cursor.execute("UPDATE RESERVATIONS SET Room = ?, OwnerUserID = ?, ReserverUserID = ?, StartTime = ?, Duration = ?, Status = ? WHERE ReservationID = ?;",(reservation.room.room_name, reservation.owner.user_id, reservation.who_reserved.user_id, int(reservation.start_time.timestamp()), reservation.duration, json.dumps(reservation.status), self.make_new_reservation_id(reservation)))
+		self.conn.commit()
+		
 	
 	def delete_user(self, user_id: str = ""):
 		...

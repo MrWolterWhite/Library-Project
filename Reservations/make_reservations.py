@@ -12,6 +12,7 @@ OFFSET_IN_DAYS = 7
 AFTER_LOGIN = "https://schedule.tau.ac.il/scilib/Web/schedule.php"
 SUBMIT_SPAM_AMOUNT = 20
 SECONDS_IN_MINUTE = 60
+MINUTES_IN_HOURS = 60
 
 room_translation_dict = {
 "Room 013": 23,
@@ -57,8 +58,7 @@ def get_current_hour_for_reservation() -> datetime:
 	'''Returns the date of the following batch of reservations (closest hour 
 	plus a week, which is OFFSET_IN_DAYS days)'''
 	curr_time = datetime.now()
-	curr_time.minute = 0
-	curr_time.hour = (curr_time.hour + 1) % 24
+	curr_time = datetime(curr_time.year, curr_time.month, curr_time.day, (curr_time.hour + 1) % 24, 0)
 	return get_X_days_later(curr_time, OFFSET_IN_DAYS)
 
 def login_to_library(session: requests.Session, reservation: Reservation):
@@ -120,6 +120,15 @@ with SQLDatabase("library.db") as database:
 		
 		- Make/Extend the reservation
 		- Change the status of the reservation in the Reservations DB'''
+		if len(reservation.reservation_id) >= 4 and reservation.reservation_id[:4] == "INIT":
+			reservation = reserve_new_room(reservation)
+		else:
+			reservation = continue_reserving_room(reservation)
+		
+		reservation.status[1] += 1
+		if reservation.status[1] == reservation.duration:
+			reservation.status[0] = 2
+		database.update_reservation(reservation)
 
 	def reserve_new_room(reservation: Reservation):
 		'''Reserves a new reservation (without a reservation ID yet)
@@ -135,7 +144,7 @@ with SQLDatabase("library.db") as database:
 					return str(n)
 
 			isr_start_time = to_2_digits(reservation.start_time.hour) + ":00:00"
-			isr_end_time = to_2_digits(reservation.start_time.hour + reservation.duration) + ":00:00"
+			isr_end_time = to_2_digits(reservation.start_time.hour + reservation.status[1] + 1) + ":00:00"
 
 			TIME_DIFFERENCE = 2 #Should stay constant
 			etc_start_time = to_2_digits((int(isr_start_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
@@ -146,10 +155,10 @@ with SQLDatabase("library.db") as database:
 
 			login_to_library(session, reservation)
 			csrf_token, user_id = load_new_library_reservation(session, formatted_date, room_id, isr_start_time, isr_end_time)
-			post_reservation_attributes(session, formatted_date, room_id, user_id, etc_start_time, etc_end_time, reservation.duration, "")
+			post_reservation_attributes(session, formatted_date, room_id, user_id, etc_start_time, etc_end_time, reservation.status[1], "")
 			wait_for_last_second_of_minute()
 			for _ in range(SUBMIT_SPAM_AMOUNT):
-				reservation_id = press_submit(session, formatted_date, room_id, user_id, csrf_token, etc_start_time, etc_end_time, reservation.duration, "")
+				reservation_id = press_submit(session, formatted_date, room_id, user_id, csrf_token, etc_start_time, etc_end_time, reservation.status[1], "")
 				if reservation_id != "":
 					print(reservation_id)
 					reservation.reservation_id = reservation_id
@@ -167,7 +176,7 @@ with SQLDatabase("library.db") as database:
 					return str(n)
 
 			isr_start_time = to_2_digits(reservation.start_time.hour) + ":00:00"
-			isr_end_time = to_2_digits(reservation.start_time.hour + reservation.duration) + ":00:00"
+			isr_end_time = to_2_digits(reservation.start_time.hour + reservation.status[1]) + ":00:00"
 
 			TIME_DIFFERENCE = 2 #Should stay constant
 			etc_start_time = to_2_digits((int(isr_start_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
@@ -178,10 +187,10 @@ with SQLDatabase("library.db") as database:
 
 			login_to_library(session, reservation)
 			csrf_token, user_id = load_existing_library_reservation(session, reservation.reservation_id)
-			post_reservation_attributes(session, formatted_date, room_id, user_id, etc_start_time, etc_end_time, reservation.duration, reservation.reservation_id)
+			post_reservation_attributes(session, formatted_date, room_id, user_id, etc_start_time, etc_end_time, reservation.status[1], reservation.reservation_id)
 			wait_for_last_second_of_minute()
 			for _ in range(SUBMIT_SPAM_AMOUNT):
-				reservation_id = press_submit(session, formatted_date, room_id, user_id, csrf_token, etc_start_time, etc_end_time, reservation.duration, reservation.reservation_id)
+				reservation_id = press_submit(session, formatted_date, room_id, user_id, csrf_token, etc_start_time, etc_end_time, reservation.status[1], reservation.reservation_id)
 				if reservation_id != "":
 					print(reservation_id)
 					reservation.reservation_id = reservation_id
@@ -206,7 +215,7 @@ with SQLDatabase("library.db") as database:
 	if __name__ == "__main__":
 		while True:
 			curr_time = int(time.time())
-			time.sleep((60*59 + 60*60 - (curr_time % 60*60)) % 60*60) #Sleep until 59th minute
+			time.sleep((SECONDS_IN_MINUTE*(MINUTES_IN_HOURS-1) + (SECONDS_IN_MINUTE*MINUTES_IN_HOURS) - (curr_time % SECONDS_IN_MINUTE*MINUTES_IN_HOURS)) % (SECONDS_IN_MINUTE*MINUTES_IN_HOURS)) #Sleep until 59th minute
 			task()
 		
 

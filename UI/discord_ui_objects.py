@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from constants import *
 import json
 
+MAX_DAYS_FORWARD_DATE_OPTIONS = 14
+
 class AddMeModal(ui.Modal, title='📝 User Sign Up'):
     def __init__(self, *, title = '📝 User Sign Up', signup_func = None):
         super().__init__(title=title)
@@ -42,6 +44,19 @@ class AddMeModal(ui.Modal, title='📝 User Sign Up'):
 
 # STEP 1 VIEW: Initial Selection (Room, Date, Time)
 
+def index_to_weekday(index: int):
+    weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    return weekdays[index]
+
+def create_date_options() -> list[discord.SelectOption]:
+    options: list[discord.SelectOption] = [discord.SelectOption(label=f"Today ({datetime.now():%Y-%m-%d})", value=f"Today ({datetime.now():%Y-%m-%d})"), discord.SelectOption(label=f"Tomorrow ({(datetime.now() + timedelta(days=1)):%Y-%m-%d})", value=f"Tomorrow ({(datetime.now() + timedelta(days=1)):%Y-%m-%d})")]
+    for i in range(2, MAX_DAYS_FORWARD_DATE_OPTIONS):
+        new_date = (datetime.now() + timedelta(days=i))
+        new_date_label = f"{index_to_weekday(new_date.weekday())} ({new_date.strftime('%Y-%m-%d')})"
+        new_option = discord.SelectOption(label=new_date_label, value=new_date_label)
+        options.append(new_option)
+    return options
+
 class ReservationStarter(ui.View):
     def __init__(self, user_id: int, add_reservation_func):
         super().__init__(timeout=300)
@@ -70,15 +85,12 @@ class ReservationStarter(ui.View):
 
     @ui.select(
         placeholder="Select Date...",
-        options=[
-            discord.SelectOption(label=f"Today ({datetime.now():%Y-%m-%d})", value=datetime.now().strftime('%Y-%m-%d')),
-            discord.SelectOption(label=f"Tomorrow ({(datetime.now() + timedelta(days=1)):%Y-%m-%d})", value=(datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')),
-            discord.SelectOption(label=f"Day After ({(datetime.now() + timedelta(days=2)):%Y-%m-%d})", value=(datetime.now() + timedelta(days=2)).strftime('%Y-%m-%d')),
-        ]
+        options=create_date_options()
     )
     async def date_select(self, interaction: discord.Interaction, select: ui.Select):
-        self.date = select.values[0]
-        select.placeholder = self.date
+        full_date = select.values[0]
+        self.date = full_date.split(" ")[1][1:-1] #To separate the day from the date and ()
+        select.placeholder = full_date
         await interaction.response.edit_message(embed=self.update_embed(), view=self)
 
     @ui.select(
@@ -168,7 +180,7 @@ class ReservationFinisher(ui.View):
         # Build DateTime object
         reservation_dt = datetime.strptime(f"{self.date} {self.time}:00:00", '%Y-%m-%d %H:%M:%S')
         year, month, day = self.date.split("-")
-        reservation_date_datetime = datetime(int(year), int(month), int(day))
+        reservation_date_datetime = datetime(int(year), int(month), int(day), int(self.time))
 
         # Insert to DB
         success = await self.add_reservation_func(
@@ -196,5 +208,32 @@ class ReservationFinisher(ui.View):
         
         
         self.stop()
+
+class reservationsSummary(ui.View):
+    def __init__(self, user_ids: str, room_names: str, dates: datetime, durations: int):
+        super().__init__(timeout=300)
+        self.user_ids = user_ids
+        self.room_names = room_names
+        self.dates = dates
+        self.durations = durations
+
+    def update_embed(self) -> discord.Embed:
+        
+        desc = ""
+        for i in range(len(self.user_ids)):
+            desc += (
+                f"**Room:** {self.room_names[i]}\n"
+                f"**Owner:** {self.user_ids[i]}\n"
+                f"**When:** {self.dates[i].strftime('%Y-%m-%d %H:%M')}\n"
+                f"**Duration:** {self.durations[i]}h\n\n"
+            )
+
+        embed = discord.Embed(
+            title="Reservations",
+            description=desc,
+            color=discord.Color.blue()
+        )
+        
+        return embed
 
 

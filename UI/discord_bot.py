@@ -9,7 +9,7 @@ from discord import app_commands, ui
 from UI.discord_ui_objects import *
 
 PRIORITIZE_MYSELF = True
-RESERVATION_INIT_STATUS = (0,0)
+RESERVATION_INIT_STATUS = (0, 0)
 
 # Your bot token from the developer portal
 load_dotenv()
@@ -65,6 +65,7 @@ with SQLDatabase("library.db") as app_database:
                 return False
                 
             reservation.owner = owner_user
+            reservation.reservation_id = app_database.make_new_reservation_id(reservation)
             print(f"Owner is {reservation.owner.username}")
             
             #Update the database
@@ -108,6 +109,16 @@ with SQLDatabase("library.db") as app_database:
     @client.tree.command(name="reserve", description="Book a new room reservation")
     async def reserve_command(interaction: discord.Interaction):
         view = ReservationStarter(interaction.user.id, add_reservation_func=add_reservation)
+        await interaction.response.send_message(embed=view.update_embed(), view=view, ephemeral=True)
+
+    @client.tree.command(name="ourrooms", description="Load our room reservation")
+    async def our_rooms_command(interaction: discord.Interaction):
+        reservations: list[Reservation] = app_database.load_reservations()
+        user_ids = [reservation.owner.username for reservation in reservations]
+        room_names = [reservation.room.room_name for reservation in reservations]
+        dates = [reservation.start_time for reservation in reservations]
+        durations = [reservation.duration for reservation in reservations]
+        view = reservationsSummary(user_ids, room_names, dates, durations)
         await interaction.response.send_message(embed=view.update_embed(), view=view, ephemeral=True)
 
     client.run(TOKEN)
