@@ -3,7 +3,7 @@ from discord import app_commands, ui
 from typing import Optional
 from datetime import datetime, timedelta
 from constants import *
-from md_styling import *
+from UI.md_styling import *
 import json
 
 MAX_DAYS_FORWARD_DATE_OPTIONS = 14
@@ -71,7 +71,7 @@ class ReservationStarter(ui.View):
     def update_embed(self) -> discord.Embed:
         embed = discord.Embed(
             title="Step 1/2: Select Time & Place",
-            description=f"Start by choosing the {bold("Room")}, {bold("Date")}, and {bold("Hour")}.",
+            description=f"Start by choosing the {bold('Room')}, {bold('Date')}, and {bold('Hour')}.",
             color=discord.Color.blurple()
         )
         return embed
@@ -134,10 +134,10 @@ class ReservationFinisher(ui.View):
         dt_obj = datetime.strptime(f"{self.date} {self.time}:00:00", '%Y-%m-%d %H:%M:%S')
         
         desc = (
-            f"{bold("Selected:")} {self.room}\n"
-            f"{bold("Start Time:")} {dt_obj.strftime('%A, %b %d')} at {self.time}:00\n"
+            f"{bold('Selected:')} {self.room}\n"
+            f"{bold('Start Time:')} {dt_obj.strftime('%A, %b %d')} at {self.time}:00\n"
             "-----------------------------\n"
-            f"Please select {bold("Duration")} and {bold("Repetition")} to finish."
+            f"Please select {bold('Duration')} and {bold('Repetition')} to finish."
         )
 
         embed = discord.Embed(
@@ -194,10 +194,10 @@ class ReservationFinisher(ui.View):
         if success:
             embed = discord.Embed(title="✅ Reservation Confirmed!", color=discord.Color.green())
             embed.description = (
-                f"{bold("Room:")} {self.room}\n"
-                f"{bold("When:")} {reservation_dt.strftime('%Y-%m-%d %H:%M')}\n"
-                f"{bold("Duration:")} {self.duration}h\n"
-                f"{bold("Repeat:")} {self.repeat[0]}"
+                f"{bold('Room:')} {self.room}\n"
+                f"{bold('When:')} {reservation_dt.strftime('%Y-%m-%d %H:%M')}\n"
+                f"{bold('Duration:')} {self.duration}h\n"
+                f"{bold('Repeat:')} {self.repeat[0]}"
             )
             # Replace the form with the success message
             await interaction.edit_original_response(embed=embed, view=None)
@@ -222,10 +222,10 @@ class reservationsSummary(ui.View):
         desc = ""
         for i in range(len(self.user_ids)):
             desc += (
-                f"{bold("Room:")} {self.room_names[i]}\n"
-                f"{bold("Owner:")} {self.user_ids[i]}\n"
-                f"{bold("When:")} {self.dates[i].strftime('%Y-%m-%d %H:%M')}\n"
-                f"{bold("Duration:")} {self.durations[i]}h\n\n"
+                f"{bold('Room:')} {self.room_names[i]}\n"
+                f"{bold('Owner:')} {self.user_ids[i]}\n"
+                f"{bold('When:')} {self.dates[i].strftime('%Y-%m-%d %H:%M')}\n"
+                f"{bold('Duration:')} {self.durations[i]}h\n\n"
             )
 
         embed = discord.Embed(
