@@ -3,6 +3,7 @@ from discord import app_commands, ui
 from typing import Optional
 from datetime import datetime, timedelta
 from constants import *
+from md_styling import *
 import json
 
 MAX_DAYS_FORWARD_DATE_OPTIONS = 14
@@ -31,7 +32,7 @@ class AddMeModal(ui.Modal, title='📝 User Sign Up'):
         if success:
             embed = discord.Embed(
                 title='✅ Sign Up Successful',
-                description=f'User **{self.username}** has been registered.',
+                description=f'User {bold(self.username)} has been registered.',
                 color=discord.Color.green()
             )
         else:
@@ -50,7 +51,8 @@ def index_to_weekday(index: int):
 
 def create_date_options() -> list[discord.SelectOption]:
     options: list[discord.SelectOption] = [discord.SelectOption(label=f"Today ({datetime.now():%Y-%m-%d})", value=f"Today ({datetime.now():%Y-%m-%d})"), discord.SelectOption(label=f"Tomorrow ({(datetime.now() + timedelta(days=1)):%Y-%m-%d})", value=f"Tomorrow ({(datetime.now() + timedelta(days=1)):%Y-%m-%d})")]
-    for i in range(2, MAX_DAYS_FORWARD_DATE_OPTIONS):
+    initial_options_len = len(options)
+    for i in range(initial_options_len, MAX_DAYS_FORWARD_DATE_OPTIONS):
         new_date = (datetime.now() + timedelta(days=i))
         new_date_label = f"{index_to_weekday(new_date.weekday())} ({new_date.strftime('%Y-%m-%d')})"
         new_option = discord.SelectOption(label=new_date_label, value=new_date_label)
@@ -69,7 +71,7 @@ class ReservationStarter(ui.View):
     def update_embed(self) -> discord.Embed:
         embed = discord.Embed(
             title="Step 1/2: Select Time & Place",
-            description="Start by choosing the **Room**, **Date**, and **Hour**.",
+            description=f"Start by choosing the {bold("Room")}, {bold("Date")}, and {bold("Hour")}.",
             color=discord.Color.blurple()
         )
         return embed
@@ -95,7 +97,7 @@ class ReservationStarter(ui.View):
 
     @ui.select(
         placeholder="Select Start Hour...",
-        options=[discord.SelectOption(label=f"{h}:00", value=str(h)) for h in range(8, 20)]
+        options=[discord.SelectOption(label=f"{h}:00", value=str(h)) for h in range(LIBRARY_OPENING_HOUR, LIBRARY_CLOSING_HOUR)]
     )
     async def time_select(self, interaction: discord.Interaction, select: ui.Select):
         self.time = int(select.values[0])
@@ -108,14 +110,12 @@ class ReservationStarter(ui.View):
             await interaction.response.send_message("⚠️ Please select Room, Date, and Time first.", ephemeral=True)
             return
         
-        # Transition to View 2
-        # We pass the collected data to the next view
         view_2 = ReservationFinisher(self.user_id, self.room, self.date, self.time, add_reservation_func=self.add_reservation_func)
         
         # Update the existing message with the new View and Embed
         await interaction.response.edit_message(embed=view_2.update_embed(), view=view_2)
 
-# --- STEP 2 VIEW: Final Details (Duration & Repeat) ---
+# STEP 2 VIEW: Final Details (Duration & Repeat)
 
 class ReservationFinisher(ui.View):
     def __init__(self, user_id: int, room: str, date: str, time: int, add_reservation_func):
@@ -134,10 +134,10 @@ class ReservationFinisher(ui.View):
         dt_obj = datetime.strptime(f"{self.date} {self.time}:00:00", '%Y-%m-%d %H:%M:%S')
         
         desc = (
-            f"**Selected:** {self.room}\n"
-            f"**Start Time:** {dt_obj.strftime('%A, %b %d')} at {self.time}:00\n"
+            f"{bold("Selected:")} {self.room}\n"
+            f"{bold("Start Time:")} {dt_obj.strftime('%A, %b %d')} at {self.time}:00\n"
             "-----------------------------\n"
-            "Please select **Duration** and **Repetition** to finish."
+            f"Please select {bold("Duration")} and {bold("Repetition")} to finish."
         )
 
         embed = discord.Embed(
@@ -162,7 +162,7 @@ class ReservationFinisher(ui.View):
         options=[discord.SelectOption(label=key, value=json.dumps(val)) for key, val in REPEAT_OPTIONS.items()]
     )
     async def repeat_select(self, interaction: discord.Interaction, select: ui.Select):
-        self.repeat = json.loads(select.values[0])
+        self.repeat = tuple(json.loads(select.values[0]))
         select.placeholder = self.repeat[0]
         await interaction.response.edit_message(embed=self.update_embed(), view=self)
 
@@ -194,10 +194,10 @@ class ReservationFinisher(ui.View):
         if success:
             embed = discord.Embed(title="✅ Reservation Confirmed!", color=discord.Color.green())
             embed.description = (
-                f"**Room:** {self.room}\n"
-                f"**When:** {reservation_dt.strftime('%Y-%m-%d %H:%M')}\n"
-                f"**Duration:** {self.duration}h\n"
-                f"**Repeat:** {self.repeat[0]}"
+                f"{bold("Room:")} {self.room}\n"
+                f"{bold("When:")} {reservation_dt.strftime('%Y-%m-%d %H:%M')}\n"
+                f"{bold("Duration:")} {self.duration}h\n"
+                f"{bold("Repeat:")} {self.repeat[0]}"
             )
             # Replace the form with the success message
             await interaction.edit_original_response(embed=embed, view=None)
@@ -222,10 +222,10 @@ class reservationsSummary(ui.View):
         desc = ""
         for i in range(len(self.user_ids)):
             desc += (
-                f"**Room:** {self.room_names[i]}\n"
-                f"**Owner:** {self.user_ids[i]}\n"
-                f"**When:** {self.dates[i].strftime('%Y-%m-%d %H:%M')}\n"
-                f"**Duration:** {self.durations[i]}h\n\n"
+                f"{bold("Room:")} {self.room_names[i]}\n"
+                f"{bold("Owner:")} {self.user_ids[i]}\n"
+                f"{bold("When:")} {self.dates[i].strftime('%Y-%m-%d %H:%M')}\n"
+                f"{bold("Duration:")} {self.durations[i]}h\n\n"
             )
 
         embed = discord.Embed(

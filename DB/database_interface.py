@@ -9,13 +9,13 @@ class Database():
 	def load_users(self) -> list[User]:
 		...
 	
-	def load_user(self, user_id: str = "") -> User:
+	def load_user_by_id(self, user_id: str = "") -> User:
 		...
 	
-	def load_reservations(self) -> list[Reservation]:
+	def load_reservations(self, only_future: bool = False) -> list[Reservation]:
 		...
 	
-	def load_reservations_of_user(self, user_id: str = "") -> list[Reservation]:
+	def load_reservations_of_user(self, user_id: str = "", only_future: bool = False) -> list[Reservation]:
 		'''fetches the reservations that are relevant for a certain user'''
 		...
 		

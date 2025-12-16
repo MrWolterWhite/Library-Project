@@ -1,4 +1,8 @@
+from __future__ import annotations
 from datetime import datetime
+import time
+
+SECONDS_IN_HOUR = 60
 
 class User:
 	'''Represents a user in our app. The class will save the following 
@@ -32,10 +36,19 @@ class Reservation:
 	def __init__(self, reservation_id: str = "", room: Room = Room(), owner: 
 	User = User(), who_reserved: User = User(), start_time: datetime = 
 	datetime(1970,1,1), duration: int = 0, status: tuple = tuple()):
-		self.reservation_id = reservation_id
-		self.room = room
-		self.owner = owner
-		self.who_reserved = who_reserved
-		self.start_time = start_time
-		self.duration = duration
-		self.status = status
+		self.reservation_id: str = reservation_id
+		self.room: Room = room
+		self.owner: User = owner
+		self.who_reserved: User = who_reserved
+		self.start_time: datetime = start_time
+		self.duration: int = duration
+		self.status: tuple = status
+
+	def filter_future_reservations(reservations: list[Reservation]):
+		return_list = []
+		for reservation in reservations:
+			curr_time = int(time.time())
+			reservation_end_time = int(int(reservation.start_time.timestamp()) + reservation.duration*SECONDS_IN_HOUR)
+			if curr_time - reservation_end_time <= 0:
+				return_list.append(reservation)
+		return return_list

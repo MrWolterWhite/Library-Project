@@ -6,6 +6,7 @@ import requests
 import json
 import time
 from requests_toolbelt.multipart.encoder import MultipartEncoder
+from constants import *
 
 OFFSET_IN_DAYS = 7
 
@@ -110,112 +111,112 @@ def wait_for_last_second_of_minute():
 		if second_in_the_minute == (SECONDS_IN_MINUTE - 1):
 			is_time_to_submit = True
 
-with SQLDatabase("library.db") as database:
+if __name__ == "__main__":
+	with SQLDatabase("library.db") as database:
 
-	def handle_reservation(reservation: Reservation):
-		'''Given a complete Reservation object, reserves or extends it
-		The function also updates the database according to the result
-		
-		The function will need to - 
-		
-		- Make/Extend the reservation
-		- Change the status of the reservation in the Reservations DB'''
-		if len(reservation.reservation_id) >= 4 and reservation.reservation_id[:4] == "INIT":
-			reservation = reserve_new_room(reservation)
-		else:
-			reservation = continue_reserving_room(reservation)
-		
-		reservation.status[1] += 1
-		if reservation.status[1] == reservation.duration:
-			reservation.status[0] = 2
-		database.update_reservation(reservation)
-
-	def reserve_new_room(reservation: Reservation):
-		'''Reserves a new reservation (without a reservation ID yet)
-		Returns an updated reservation object (with the updated reservation ID)'''
-		with requests.Session() as session:
-			headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36", "Host": "schedule.tau.ac.il", "Origin": "https://schedule.tau.ac.il", "Referer": "https://schedule.tau.ac.il/scilib/Web/index.php"}
-			session.headers = headers
-
-			def to_2_digits(n):
-				if n < 10:
-					return f"0{n}"
-				else:
-					return str(n)
-
-			isr_start_time = to_2_digits(reservation.start_time.hour) + ":00:00"
-			isr_end_time = to_2_digits(reservation.start_time.hour + reservation.status[1] + 1) + ":00:00"
-
-			TIME_DIFFERENCE = 2 #Should stay constant
-			etc_start_time = to_2_digits((int(isr_start_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
-			etc_end_time = to_2_digits((int(isr_end_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
-
-			formatted_date = f"{reservation.start_time.year}-{reservation.start_time.month}-{reservation.start_time.day}"
-			room_id = room_translation_dict[reservation.room.room_name]
-
-			login_to_library(session, reservation)
-			csrf_token, user_id = load_new_library_reservation(session, formatted_date, room_id, isr_start_time, isr_end_time)
-			post_reservation_attributes(session, formatted_date, room_id, user_id, etc_start_time, etc_end_time, reservation.status[1], "")
-			wait_for_last_second_of_minute()
-			for _ in range(SUBMIT_SPAM_AMOUNT):
-				reservation_id = press_submit(session, formatted_date, room_id, user_id, csrf_token, etc_start_time, etc_end_time, reservation.status[1], "")
-				if reservation_id != "":
-					print(reservation_id)
-					reservation.reservation_id = reservation_id
-			return reservation
-
-	def continue_reserving_room(reservation: Reservation):
-		with requests.Session() as session:
-			headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36", "Host": "schedule.tau.ac.il", "Origin": "https://schedule.tau.ac.il", "Referer": "https://schedule.tau.ac.il/scilib/Web/index.php"}
-			session.headers = headers
-
-			def to_2_digits(n):
-				if n < 10:
-					return f"0{n}"
-				else:
-					return str(n)
-
-			isr_start_time = to_2_digits(reservation.start_time.hour) + ":00:00"
-			isr_end_time = to_2_digits(reservation.start_time.hour + reservation.status[1]) + ":00:00"
-
-			TIME_DIFFERENCE = 2 #Should stay constant
-			etc_start_time = to_2_digits((int(isr_start_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
-			etc_end_time = to_2_digits((int(isr_end_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
-
-			formatted_date = f"{reservation.start_time.year}-{reservation.start_time.month}-{reservation.start_time.day}"
-			room_id = room_translation_dict[reservation.room.room_name]
-
-			login_to_library(session, reservation)
-			csrf_token, user_id = load_existing_library_reservation(session, reservation.reservation_id)
-			post_reservation_attributes(session, formatted_date, room_id, user_id, etc_start_time, etc_end_time, reservation.status[1], reservation.reservation_id)
-			wait_for_last_second_of_minute()
-			for _ in range(SUBMIT_SPAM_AMOUNT):
-				reservation_id = press_submit(session, formatted_date, room_id, user_id, csrf_token, etc_start_time, etc_end_time, reservation.status[1], reservation.reservation_id)
-				if reservation_id != "":
-					print(reservation_id)
-					reservation.reservation_id = reservation_id
-			return reservation
-
-	def task():
-
-		current_batch: list[Reservation] = database.load_reservations_of_batch(get_current_hour_for_reservation())
-		threads = []
-		
-		for reservation in current_batch:
-			new_thread = threading.Thread(target=handle_reservation, args=(reservation,))
-			new_thread.start()
-			threads.append(new_thread)
+		def handle_reservation(reservation: Reservation):
+			'''Given a complete Reservation object, reserves or extends it
+			The function also updates the database according to the result
 			
-		for thread in threads:
-			thread.join()
-		
-		#If I want to do something after the threads are finished
-		
-	# Execute task() every hour at XX:59
-	if __name__ == "__main__":
+			The function will - 
+			- Make/Extend the reservation
+			- Change the status of the reservation in the Reservations DB'''
+
+			if database.is_new_reservation(reservation):
+				reservation = reserve_new_room(reservation)
+			else:
+				reservation = continue_reserving_room(reservation)
+
+			reservation.status[1] += 1 #TODO: fix. only if succeeded
+			if reservation.status[1] == reservation.duration:
+				reservation.status[0] = FINISHED_RESERVATIONS_STATUS_CODE
+			database.update_reservation(reservation)
+
+		def reserve_new_room(reservation: Reservation):
+			'''Reserves a new reservation (without a reservation ID yet)
+			Returns an updated reservation object (with the updated reservation ID)'''
+			with requests.Session() as session:
+				headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36", "Host": "schedule.tau.ac.il", "Origin": "https://schedule.tau.ac.il", "Referer": "https://schedule.tau.ac.il/scilib/Web/index.php"}
+				session.headers = headers
+
+				def to_2_digits(n):
+					if n < 10:
+						return f"0{n}"
+					else:
+						return str(n)
+
+				isr_start_time = to_2_digits(reservation.start_time.hour) + ":00:00"
+				isr_end_time = to_2_digits(reservation.start_time.hour + reservation.status[1] + 1) + ":00:00"
+
+				TIME_DIFFERENCE = 2 #Should stay constant
+				etc_start_time = to_2_digits((int(isr_start_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
+				etc_end_time = to_2_digits((int(isr_end_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
+
+				formatted_date = f"{reservation.start_time.year}-{reservation.start_time.month}-{reservation.start_time.day}"
+				room_id = room_translation_dict[reservation.room.room_name]
+
+				login_to_library(session, reservation)
+				csrf_token, user_id = load_new_library_reservation(session, formatted_date, room_id, isr_start_time, isr_end_time)
+				post_reservation_attributes(session, formatted_date, room_id, user_id, etc_start_time, etc_end_time, reservation.status[1], "")
+				wait_for_last_second_of_minute()
+				for _ in range(SUBMIT_SPAM_AMOUNT):
+					reservation_id = press_submit(session, formatted_date, room_id, user_id, csrf_token, etc_start_time, etc_end_time, reservation.status[1], "")
+					if reservation_id != "":
+						print(reservation_id)
+						reservation.reservation_id = reservation_id
+				return reservation
+
+		def continue_reserving_room(reservation: Reservation):
+			with requests.Session() as session:
+				headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36", "Host": "schedule.tau.ac.il", "Origin": "https://schedule.tau.ac.il", "Referer": "https://schedule.tau.ac.il/scilib/Web/index.php"}
+				session.headers = headers
+
+				def to_2_digits(n):
+					if n < 10:
+						return f"0{n}"
+					else:
+						return str(n)
+
+				isr_start_time = to_2_digits(reservation.start_time.hour) + ":00:00"
+				isr_end_time = to_2_digits(reservation.start_time.hour + reservation.status[1]) + ":00:00"
+
+				TIME_DIFFERENCE = 2 #Should stay constant
+				etc_start_time = to_2_digits((int(isr_start_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
+				etc_end_time = to_2_digits((int(isr_end_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
+
+				formatted_date = f"{reservation.start_time.year}-{reservation.start_time.month}-{reservation.start_time.day}"
+				room_id = room_translation_dict[reservation.room.room_name]
+
+				login_to_library(session, reservation)
+				csrf_token, user_id = load_existing_library_reservation(session, reservation.reservation_id)
+				post_reservation_attributes(session, formatted_date, room_id, user_id, etc_start_time, etc_end_time, reservation.status[1], reservation.reservation_id)
+				wait_for_last_second_of_minute()
+				for _ in range(SUBMIT_SPAM_AMOUNT):
+					reservation_id = press_submit(session, formatted_date, room_id, user_id, csrf_token, etc_start_time, etc_end_time, reservation.status[1], reservation.reservation_id)
+					if reservation_id != "":
+						print(reservation_id)
+						reservation.reservation_id = reservation_id
+				return reservation
+
+		def task():
+
+			current_batch: list[Reservation] = database.load_reservations_of_batch(get_current_hour_for_reservation())
+			threads = []
+			
+			for reservation in current_batch:
+				new_thread = threading.Thread(target=handle_reservation, args=(reservation,))
+				new_thread.start()
+				threads.append(new_thread)
+				
+			for thread in threads:
+				thread.join()
+			
+			#If I want to do something after the threads are finished
+			
+		# Execute task() every hour at XX:59
 		while True:
 			curr_time = int(time.time())
 			time.sleep((SECONDS_IN_MINUTE*(MINUTES_IN_HOURS-1) + (SECONDS_IN_MINUTE*MINUTES_IN_HOURS) - (curr_time % SECONDS_IN_MINUTE*MINUTES_IN_HOURS)) % (SECONDS_IN_MINUTE*MINUTES_IN_HOURS)) #Sleep until 59th minute
 			task()
-		
+			
 

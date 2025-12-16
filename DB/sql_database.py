@@ -2,7 +2,9 @@ from DB.database_interface import *
 import sqlite3
 import json
 import random
-import time
+from constants import *
+
+INITIALIZING_PREFIX = "INIT"
 
 class SQLDatabase(Database):
 
@@ -63,7 +65,7 @@ class SQLDatabase(Database):
 			users.append(new_user)
 		return users
 	
-	def load_user(self, user_id: str = "") -> User:
+	def load_user_by_id(self, user_id: str = "") -> User:
 		self.cursor.execute("SELECT * FROM USERS WHERE UserID = ?", (user_id,))
 		table_user = self.cursor.fetchone()
 		if table_user is not None:
@@ -73,35 +75,55 @@ class SQLDatabase(Database):
 		else:
 			return None
 	
-	def load_reservations(self) -> list[Reservation]:
+	def load_reservations(self, only_future: bool = False) -> list[Reservation]:
 		self.cursor.execute("SELECT * FROM RESERVATIONS")
 		reservations = []
 		for table_reservation in self.cursor.fetchall():
 			reservation_id, room_str, owner_userid, reserver_userid, start_time_in_int, duration, status_str = tuple(table_reservation)
 			room = Room(room_str)
-			owner = self.load_user(owner_userid)
-			reserver = self.load_user(reserver_userid)
+			owner = self.load_user_by_id(owner_userid)
+			reserver = self.load_user_by_id(reserver_userid)
 			start_time = datetime.fromtimestamp(start_time_in_int)
 			status = json.loads(status_str)
 			reservation = Reservation(reservation_id, room, owner, reserver, start_time, duration, status)
 			reservations.append(reservation)
+		if only_future:
+			return Reservation.filter_future_reservations(reservations)
 		return reservations
 
 	
-	def load_reservations_of_user(self, user_id: str = "") -> list[Reservation]:
+	def load_reservations_of_user(self, user_id: str = "", only_future: bool = False) -> list[Reservation]:
 		'''fetches the reservations that are relevant for a certain user'''
 		self.cursor.execute("SELECT * FROM RESERVATIONS WHERE OwnerUserID = ? or ReserverUserID = ?", (user_id, user_id))
 		reservations = []
 		for table_reservation in self.cursor.fetchall():
 			reservation_id, room_str, owner_userid, reserver_userid, start_time_in_int, duration, status_str = tuple(table_reservation)
 			room = Room(room_str)
-			owner = self.load_user(owner_userid)
-			reserver = self.load_user(reserver_userid)
+			owner = self.load_user_by_id(owner_userid)
+			reserver = self.load_user_by_id(reserver_userid)
 			start_time = datetime.fromtimestamp(start_time_in_int)
 			status = json.loads(status_str)
 			reservation = Reservation(reservation_id, room, owner, reserver, start_time, duration, status)
 			reservations.append(reservation)
+		if only_future:
+			return Reservation.filter_future_reservations(reservations)
 		return reservations
+	
+	def load_reservation_by_id(self, reservation_id: str = "") -> Reservation | None:
+		self.cursor.execute("SELECT * FROM RESERVATIONS WHERE ReservationID = ?", (reservation_id,))
+		reservations = []
+		for table_reservation in (self.cursor.fetchall() or []):
+			reservation_id, room_str, owner_userid, reserver_userid, start_time_in_int, duration, status_str = tuple(table_reservation)
+			room = Room(room_str)
+			owner = self.load_user_by_id(owner_userid)
+			reserver = self.load_user_by_id(reserver_userid)
+			start_time = datetime.fromtimestamp(start_time_in_int)
+			status = json.loads(status_str)
+			reservation = Reservation(reservation_id, room, owner, reserver, start_time, duration, status)
+			reservations.append(reservation)
+		if len(reservations) == 0:
+			return None
+		return reservations[0]
 	
 	def is_at_most_X_hours_apart(date1: datetime, date2: datetime, x: int):
 		return ((date1.timestamp() - date2.timestamp()) >= 60*60*x)
@@ -112,11 +134,10 @@ class SQLDatabase(Database):
 		all_reservations: list[Reservation] = self.load_reservations()
 		batch_reservations: list[Reservation] = []
 		for reservation in all_reservations:
-			if SQLDatabase.is_at_most_X_hours_apart(reservation.start_time, start_time, reservation.duration) and SQLDatabase.is_at_least_X_days_apart(reservation.start_time, start_time, 0):
+			if reservation.status != FAILED_RESERVATION_STATUS_CODE and SQLDatabase.is_at_most_X_hours_apart(reservation.start_time, start_time, reservation.duration) and SQLDatabase.is_at_least_X_days_apart(reservation.start_time, start_time, 0):
 				batch_reservations.append(reservation)
 		return batch_reservations
 			
-
 	def is_same_day(date1: datetime, date2: datetime):
 		if date1.day == date2.day and date1.month == date2.month and date1.year == date2.year:
 			return True
@@ -152,13 +173,12 @@ class SQLDatabase(Database):
 			return False
 		return True
 
-
-	
 	def add_reservation(self, res_id: str = "", room_name: str = "", owner_userid: str = "", reserver_userid: str = "", date: datetime = datetime(1970, 1, 1), duration: int = 0, status: tuple = tuple()) -> str:
 		'''Gets attributes of a reservation and adds it to the database'''
 		date_to_int = int(date.timestamp())
 		self.cursor.execute("INSERT INTO RESERVATIONS VALUES (?, ?, ?, ?, ?, ?, ?);",(res_id, room_name, owner_userid, reserver_userid, date_to_int, duration, json.dumps(status)))
 		self.conn.commit()
+		#TODO: Update the owner's reservations
 	
 	def add_user(self, username: str = "", password: str = "", discord_id: str = 
 	""):
@@ -169,15 +189,21 @@ class SQLDatabase(Database):
 		self.conn.commit()
 		
 	def make_new_reservation_id(self, reservation: Reservation):
-		return f"INIT{reservation.owner.user_id}{reservation.start_time.date().strftime('%Y.%m.%d')}"
+		return f"{INITIALIZING_PREFIX}{reservation.owner.user_id}{reservation.start_time.date().strftime('%Y.%m.%d')}"
+	
+	def is_new_reservation(self, reservation: Reservation):
+		res_id = reservation.reservation_id
+		return ((len(res_id) >= len(INITIALIZING_PREFIX)) and res_id[:INITIALIZING_PREFIX] == INITIALIZING_PREFIX)
 
 	def update_reservation(self, reservation: Reservation):
+		if self.load_reservation_by_id(reservation.reservation_id) is None:
+			#The reservation is saved with an initialized name
+			self.delete_reservation(self.make_new_reservation_id(reservation))
+			self.add_reservation(reservation.reservation_id, reservation.room.room_name, reservation.owner.user_id, reservation.who_reserved.user_id, reservation.start_time, reservation.duration, reservation.status)
+		
 		self.cursor.execute("UPDATE RESERVATIONS SET Room = ?, OwnerUserID = ?, ReserverUserID = ?, StartTime = ?, Duration = ?, Status = ? WHERE ReservationID = ?;",(reservation.room.room_name, reservation.owner.user_id, reservation.who_reserved.user_id, int(reservation.start_time.timestamp()), reservation.duration, json.dumps(reservation.status), reservation.reservation_id))
 		self.conn.commit()
-		self.cursor.execute("UPDATE RESERVATIONS SET Room = ?, OwnerUserID = ?, ReserverUserID = ?, StartTime = ?, Duration = ?, Status = ? WHERE ReservationID = ?;",(reservation.room.room_name, reservation.owner.user_id, reservation.who_reserved.user_id, int(reservation.start_time.timestamp()), reservation.duration, json.dumps(reservation.status), self.make_new_reservation_id(reservation)))
-		self.conn.commit()
 		
-	
 	def delete_user(self, user_id: str = ""):
 		...
 		
