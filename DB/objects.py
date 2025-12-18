@@ -1,6 +1,8 @@
 from __future__ import annotations
 from datetime import datetime
 import time
+import json
+from constants import *
 
 SECONDS_IN_HOUR = 60
 
@@ -26,7 +28,21 @@ class Room:
 	def __init__(self, room_name: str = "", description: str = ""):
 		self.room_name = room_name
 		self.description = description
-		
+	
+class ReservationStatus:
+	def __init__(self, status_code: int = INITIAL_RESERVATION_STATUS_CODE, reserved_duration: int = INITIAL_RESERVED_DURATION, description: str = ""):
+		self.status_code = status_code
+		self.reserved_duration = reserved_duration
+		self.description = description
+
+	def status_to_json_str(self) -> str:
+		return json.dumps([self.status_code, self.reserved_duration, self.description])
+
+	def json_str_to_status(stringified_json_self: str):
+		status_list = json.loads(stringified_json_self)
+		status_code, reserved_duration, description = tuple(status_list)
+		return ReservationStatus(status_code, reserved_duration, description)
+
 class Reservation:
 	'''Represents a reservation in our app. The class will save the following 
 	attributes for each reservation: reservation_id, room (an instance of class 
@@ -35,14 +51,14 @@ class Reservation:
 
 	def __init__(self, reservation_id: str = "", room: Room = Room(), owner: 
 	User = User(), who_reserved: User = User(), start_time: datetime = 
-	datetime(1970,1,1), duration: int = 0, status: tuple = tuple()):
+	datetime(1970,1,1), duration: int = 0, status: ReservationStatus = ReservationStatus()):
 		self.reservation_id: str = reservation_id
 		self.room: Room = room
 		self.owner: User = owner
 		self.who_reserved: User = who_reserved
 		self.start_time: datetime = start_time
 		self.duration: int = duration
-		self.status: tuple = status
+		self.status: ReservationStatus = status
 
 	def filter_future_reservations(reservations: list[Reservation]):
 		return_list = []

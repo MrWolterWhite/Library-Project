@@ -127,9 +127,9 @@ if __name__ == "__main__":
 			else:
 				reservation = continue_reserving_room(reservation)
 
-			reservation.status[1] += 1 #TODO: fix. only if succeeded
-			if reservation.status[1] == reservation.duration:
-				reservation.status[0] = FINISHED_RESERVATIONS_STATUS_CODE
+			reservation.status.reserved_duration += 1 #TODO: fix. only if succeeded
+			if reservation.status.reserved_duration == reservation.duration:
+				reservation.status.status_code = FINISHED_RESERVATIONS_STATUS_CODE
 			database.update_reservation(reservation)
 
 		def reserve_new_room(reservation: Reservation):
@@ -146,7 +146,7 @@ if __name__ == "__main__":
 						return str(n)
 
 				isr_start_time = to_2_digits(reservation.start_time.hour) + ":00:00"
-				isr_end_time = to_2_digits(reservation.start_time.hour + reservation.status[1] + 1) + ":00:00"
+				isr_end_time = to_2_digits(reservation.start_time.hour + reservation.status.reserved_duration + 1) + ":00:00"
 
 				TIME_DIFFERENCE = 2 #Should stay constant
 				etc_start_time = to_2_digits((int(isr_start_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
@@ -157,10 +157,10 @@ if __name__ == "__main__":
 
 				login_to_library(session, reservation)
 				csrf_token, user_id = load_new_library_reservation(session, formatted_date, room_id, isr_start_time, isr_end_time)
-				post_reservation_attributes(session, formatted_date, room_id, user_id, etc_start_time, etc_end_time, reservation.status[1], "")
+				post_reservation_attributes(session, formatted_date, room_id, user_id, etc_start_time, etc_end_time, reservation.status.reserved_duration, "")
 				wait_for_last_second_of_minute()
 				for _ in range(SUBMIT_SPAM_AMOUNT):
-					reservation_id = press_submit(session, formatted_date, room_id, user_id, csrf_token, etc_start_time, etc_end_time, reservation.status[1], "")
+					reservation_id = press_submit(session, formatted_date, room_id, user_id, csrf_token, etc_start_time, etc_end_time, reservation.status.reserved_duration, "")
 					if reservation_id != "":
 						print(reservation_id)
 						reservation.reservation_id = reservation_id
@@ -178,7 +178,7 @@ if __name__ == "__main__":
 						return str(n)
 
 				isr_start_time = to_2_digits(reservation.start_time.hour) + ":00:00"
-				isr_end_time = to_2_digits(reservation.start_time.hour + reservation.status[1]) + ":00:00"
+				isr_end_time = to_2_digits(reservation.start_time.hour + reservation.status.reserved_duration + 1) + ":00:00"
 
 				TIME_DIFFERENCE = 2 #Should stay constant
 				etc_start_time = to_2_digits((int(isr_start_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
@@ -189,10 +189,10 @@ if __name__ == "__main__":
 
 				login_to_library(session, reservation)
 				csrf_token, user_id = load_existing_library_reservation(session, reservation.reservation_id)
-				post_reservation_attributes(session, formatted_date, room_id, user_id, etc_start_time, etc_end_time, reservation.status[1], reservation.reservation_id)
+				post_reservation_attributes(session, formatted_date, room_id, user_id, etc_start_time, etc_end_time, reservation.status.reserved_duration, reservation.reservation_id)
 				wait_for_last_second_of_minute()
 				for _ in range(SUBMIT_SPAM_AMOUNT):
-					reservation_id = press_submit(session, formatted_date, room_id, user_id, csrf_token, etc_start_time, etc_end_time, reservation.status[1], reservation.reservation_id)
+					reservation_id = press_submit(session, formatted_date, room_id, user_id, csrf_token, etc_start_time, etc_end_time, reservation.status.reserved_duration, reservation.reservation_id)
 					if reservation_id != "":
 						print(reservation_id)
 						reservation.reservation_id = reservation_id

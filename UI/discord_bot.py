@@ -10,6 +10,7 @@ from UI.discord_ui_objects import *
 from constants import *
 
 PRIORITIZE_MYSELF = True
+RESERVATION_INIT_STATUS = ReservationStatus(INITIAL_RESERVATION_STATUS_CODE, INITIAL_RESERVED_DURATION, "")
 
 if __name__ == "__main__":
 
@@ -55,7 +56,7 @@ if __name__ == "__main__":
             
             try:
                 room: Room = Room(room_name=room_name)
-                reservation: Reservation = Reservation(None, room, None, app_database.load_user_by_id(discord_id), start_time, duration, tuple()) #Create the Reservation object
+                reservation: Reservation = Reservation(None, room, None, app_database.load_user_by_id(discord_id), start_time, duration, ReservationStatus()) #Create the Reservation object
                 
                 owner_user = app_database.find_owner(reservation, 
                     myself = reservation.who_reserved,
@@ -70,7 +71,7 @@ if __name__ == "__main__":
                 print(f"Owner is {reservation.owner.username}")
                 
                 #Update the database
-                app_database.add_reservation(reservation.reservation_id, room.room_name, owner_user.user_id, reservation.who_reserved.user_id, start_time, duration, RESERVATION_INIT_STATUS)
+                app_database.add_reservation(reservation.reservation_id, room.room_name, owner_user.user_id, reservation.who_reserved.user_id, start_time, duration, RESERVATION_INIT_STATUS.status_to_json_str())
             except Exception as e:
                 return False
             return True

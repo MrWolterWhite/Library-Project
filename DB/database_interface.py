@@ -35,7 +35,7 @@ class Database():
 		...
 
 	def add_reservation(self, res_id: str = "", room_name: str = "", owner: str 
-	= "", date: datetime = datetime(1970, 1, 1), duration: int = 0, status: tuple = tuple()) -> str:
+	= "", date: datetime = datetime(1970, 1, 1), duration: int = 0, status: str = "") -> str:
 		'''Gets attributes of a reservation and adds it to the database'''
 		...
 	
