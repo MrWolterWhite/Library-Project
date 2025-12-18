@@ -36,10 +36,11 @@ class ReservationStatus:
 		self.description = description
 
 	def status_to_json_str(self) -> str:
-		json.dumps([self.status_code, self.reserved_duration, self.description])
+		return json.dumps([self.status_code, self.reserved_duration, self.description])
 
 	def json_str_to_status(stringified_json_self: str):
-		status_code, reserved_duration, description = tuple(json.loads(stringified_json_self))
+		status_list = json.loads(stringified_json_self)
+		status_code, reserved_duration, description = tuple(status_list)
 		return ReservationStatus(status_code, reserved_duration, description)
 
 class Reservation:

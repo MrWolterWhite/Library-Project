@@ -10,6 +10,7 @@ from UI.discord_ui_objects import *
 from constants import *
 
 PRIORITIZE_MYSELF = True
+RESERVATION_INIT_STATUS = ReservationStatus(INITIAL_RESERVATION_STATUS_CODE, INITIAL_RESERVED_DURATION, "")
 
 if __name__ == "__main__":
 

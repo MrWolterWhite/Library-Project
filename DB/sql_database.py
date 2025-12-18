@@ -166,10 +166,10 @@ class SQLDatabase(Database):
 			return False
 		return True
 
-	def add_reservation(self, res_id: str = "", room_name: str = "", owner_userid: str = "", reserver_userid: str = "", date: datetime = datetime(1970, 1, 1), duration: int = 0, status: str = "") -> str:
+	def add_reservation(self, res_id: str = "", room_name: str = "", owner_userid: str = "", reserver_userid: str = "", date: datetime = datetime(1970, 1, 1), duration: int = 0, status: ReservationStatus = ReservationStatus()) -> str:
 		'''Gets attributes of a reservation and adds it to the database'''
 		date_to_int = int(date.timestamp())
-		self.cursor.execute("INSERT INTO RESERVATIONS VALUES (?, ?, ?, ?, ?, ?, ?);",(res_id, room_name, owner_userid, reserver_userid, date_to_int, duration, json.dumps(status)))
+		self.cursor.execute("INSERT INTO RESERVATIONS VALUES (?, ?, ?, ?, ?, ?, ?);",(res_id, room_name, owner_userid, reserver_userid, date_to_int, duration, status))
 		self.conn.commit()
 		#TODO: Update the owner's reservations
 	
