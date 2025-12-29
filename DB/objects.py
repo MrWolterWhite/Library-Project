@@ -14,11 +14,11 @@ class User:
 
 	def __init__(self, user_id: str = "", username: str = "", password: str = 
 		"", discord_id: str = "", week_window_reservations_ids: list[str] = list()):
-		self.user_id = user_id
-		self.username = username
-		self.password = password
-		self.discord_id = discord_id
-		self.week_window_reservations_ids = week_window_reservations_ids
+		self.user_id: str = user_id
+		self.username: str = username
+		self.password: str = password
+		self.discord_id: str = discord_id
+		self.week_window_reservations_ids: list[str] = week_window_reservations_ids
 		
 		
 class Room:
@@ -26,14 +26,14 @@ class Room:
 	attributes for each room: name, description'''
 
 	def __init__(self, room_name: str = "", description: str = ""):
-		self.room_name = room_name
-		self.description = description
+		self.room_name: str = room_name
+		self.description: str = description
 	
 class ReservationStatus:
 	def __init__(self, status_code: int = INITIAL_RESERVATION_STATUS_CODE, reserved_duration: int = INITIAL_RESERVED_DURATION, description: str = ""):
-		self.status_code = status_code
-		self.reserved_duration = reserved_duration
-		self.description = description
+		self.status_code: int = status_code
+		self.reserved_duration: int = reserved_duration
+		self.description: int = description
 
 	def status_to_json_str(self) -> str:
 		return json.dumps([self.status_code, self.reserved_duration, self.description])
