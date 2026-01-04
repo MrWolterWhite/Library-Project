@@ -25,7 +25,7 @@ if __name__ == "__main__":
         async def on_ready(self):
             print(f'Logged in as {self.user} (ID: {self.user.id})')
             await self.tree.sync()
-            print('✅ Commands synced globally.')
+            print('Commands synced globally.')
 
     intents = discord.Intents.default()
     client = MyClient(intents=intents)
