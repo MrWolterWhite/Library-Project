@@ -227,7 +227,7 @@ class SQLDatabase(Database):
 		is_legal = False
 		user = User()
 		
-		TRIES = 50
+		TRIES = 500
 		counter = 0
 		
 		while not is_legal and counter < TRIES:
