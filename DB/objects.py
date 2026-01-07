@@ -2,9 +2,7 @@ from __future__ import annotations
 from datetime import datetime
 import time
 import json
-from constants import *
-
-SECONDS_IN_HOUR = 60
+from constants import INITIAL_RESERVATION_STATUS_CODE, INITIAL_RESERVED_DURATION, NUM_SECONDS_IN_MINUTE, NUM_MINUTES_IN_HOUR
 
 class User:
 	'''Represents a user in our app. The class will save the following 
@@ -13,7 +11,7 @@ class User:
 	in the window of [now - week, now + week]'''
 
 	def __init__(self, user_id: str = "", username: str = "", password: str = 
-		"", discord_id: str = "", week_window_reservations_ids: list[str] = list()):
+		"", discord_id: str = "", week_window_reservations_ids: list[str] = None):
 		self.user_id: str = user_id
 		self.username: str = username
 		self.password: str = password
@@ -30,6 +28,13 @@ class Room:
 		self.description: str = description
 	
 class ReservationStatus:
+	'''Saves the current status of a reservation
+	args:
+	- status_code - represents the state the reservation is currently at.
+	for example, not ordered yet, ordered some but not all, ordered everything, error, etc...
+	- reserved_duration - how many hours did we order until now
+	- description - description for user output
+	'''
 	def __init__(self, status_code: int = INITIAL_RESERVATION_STATUS_CODE, reserved_duration: int = INITIAL_RESERVED_DURATION, description: str = ""):
 		self.status_code: int = status_code
 		self.reserved_duration: int = reserved_duration
@@ -46,7 +51,7 @@ class ReservationStatus:
 class Reservation:
 	'''Represents a reservation in our app. The class will save the following 
 	attributes for each reservation: reservation_id, room (an instance of class 
-	Room), the owner of the room, who reserved the room, start_time, duration 
+	Room), the owner of the room (in the library's website), who reserved the room (in this system), start_time, duration 
 	and status'''
 
 	def __init__(self, reservation_id: str = "", room: Room = Room(), owner: 
@@ -63,8 +68,8 @@ class Reservation:
 	def filter_future_reservations(reservations: list[Reservation]):
 		return_list = []
 		for reservation in reservations:
-			curr_time = int(time.time())
-			reservation_end_time = int(int(reservation.start_time.timestamp()) + reservation.duration*SECONDS_IN_HOUR)
+			curr_time = time.time()
+			reservation_end_time = int(int(reservation.start_time.timestamp()) + reservation.duration * NUM_SECONDS_IN_MINUTE * NUM_MINUTES_IN_HOUR)
 			if curr_time - reservation_end_time <= 0:
 				return_list.append(reservation)
 		return return_list

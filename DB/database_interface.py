@@ -1,4 +1,4 @@
-from DB.objects import *
+from DB.objects import Reservation, User
 from datetime import datetime
 
 class Database():

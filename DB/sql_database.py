@@ -1,8 +1,11 @@
-from DB.database_interface import *
+from DB.objects import Reservation, ReservationStatus, Room, User
+from database_interface import Database
+from datetime import datetime
 import sqlite3
 import json
 import random
-from constants import *
+from constants import FAILED_RESERVATION_STATUS_CODE, NUM_HOURS_IN_DAY, NUM_OWNER_TRIES
+from utils import is_at_least_X_days_apart, is_same_day, is_at_most_X_hours_apart
 
 INITIALIZING_PREFIX = "INIT"
 
@@ -11,19 +14,20 @@ class SQLDatabase(Database):
 	def __init__(self, filename: str = ""):
 		self.filename = filename
 		self.conn = None
+		self.cursor = None
 
-	def is_table_exist(cursor, table_name):
-		cursor.execute("""
+	def is_table_exist(self, table_name):
+		self.cursor.execute("""
 			SELECT name FROM sqlite_master 
 			WHERE type='table' AND name=?;
 		""", (table_name,))
 
-		return (cursor.fetchone() is not None)
+		return (self.cursor.fetchone() is not None)
 
 	def __enter__(self):
 		self.conn = sqlite3.connect(self.filename)
 		self.cursor = self.conn.cursor()
-		if not SQLDatabase.is_table_exist(self.cursor, "USERS"):
+		if not self.is_table_exist("USERS"):
 			table_creation_query = """
 				CREATE TABLE USERS (
 					UserID VARCHAR(50) PRIMARY KEY,
@@ -36,7 +40,7 @@ class SQLDatabase(Database):
 
 			self.cursor.execute(table_creation_query)
 
-		if not SQLDatabase.is_table_exist(self.cursor, "RESERVATIONS"):
+		if not self.is_table_exist("RESERVATIONS"):
 			table_creation_query = """
 				CREATE TABLE RESERVATIONS (
 					ReservationID VARCHAR(50) PRIMARY KEY,
@@ -93,11 +97,9 @@ class SQLDatabase(Database):
 		if only_future:
 			return Reservation.filter_future_reservations(reservations)
 		return reservations
-
 	
-	def load_reservations_of_user(self, user_id: str = "", only_future: bool = False) -> list[Reservation]:
-		'''fetches the reservations that are relevant for a certain user'''
-		self.cursor.execute("SELECT * FROM RESERVATIONS WHERE OwnerUserID = ? or ReserverUserID = ?", (user_id, user_id))
+	def cursor_execution_to_reservations(self, only_future: bool = False) -> list[Reservation]:
+		'''After the curser executed a SELECT from RESERVATIONS Database, make it a list of Reservation object'''
 		reservations = []
 		for table_reservation in self.cursor.fetchall():
 			reservation_id, room_str, owner_userid, reserver_userid, start_time_in_int, duration, status_str = tuple(table_reservation)
@@ -106,7 +108,22 @@ class SQLDatabase(Database):
 		if only_future:
 			return Reservation.filter_future_reservations(reservations)
 		return reservations
+
+	def load_reservations_of_reserver(self, user_id: str = "", only_future: bool = False) -> list[Reservation]:
+		'''fetches the reservations that are relevant for a certain user'''
+		self.cursor.execute("SELECT * FROM RESERVATIONS WHERE ReserverUserID = ?", (user_id, ))
+		return self.cursor_execution_to_reservations(only_future)
 	
+	def load_reservations_of_owner(self, user_id: str = "", only_future: bool = False) -> list[Reservation]:
+		'''fetches the reservations that are relevant for a certain user'''
+		self.cursor.execute("SELECT * FROM RESERVATIONS WHERE OwnerUserID = ?", (user_id, ))
+		return self.cursor_execution_to_reservations(only_future)
+
+	def load_reservations_of_user(self, user_id: str = "", only_future: bool = False) -> list[Reservation]:
+		'''fetches the reservations that are relevant for a certain user'''
+		self.cursor.execute("SELECT * FROM RESERVATIONS WHERE OwnerUserID = ? or ReserverUserID = ?", (user_id, user_id))
+		return self.cursor_execution_to_reservations(only_future)
+
 	def load_reservation_by_id(self, reservation_id: str = "") -> Reservation | None:
 		self.cursor.execute("SELECT * FROM RESERVATIONS WHERE ReservationID = ?", (reservation_id,))
 		reservations = []
@@ -116,10 +133,7 @@ class SQLDatabase(Database):
 			reservations.append(reservation)
 		if len(reservations) == 0:
 			return None
-		return reservations[0]
-	
-	def is_at_most_X_hours_apart(date1: datetime, date2: datetime, x: int):
-		return ((date1.timestamp() - date2.timestamp()) >= 60*60*x)
+		return reservations[-1] #ID should be unique, not supposed to be more than 1
 		
 	def load_reservations_of_batch(self, start_time: datetime = datetime(1970, 1, 1)) -> list[Reservation]:
 		'''fetches the reservations that are relevant for a certain time (and 
@@ -127,17 +141,9 @@ class SQLDatabase(Database):
 		all_reservations: list[Reservation] = self.load_reservations()
 		batch_reservations: list[Reservation] = []
 		for reservation in all_reservations:
-			if reservation.status.status_code != FAILED_RESERVATION_STATUS_CODE and SQLDatabase.is_at_most_X_hours_apart(reservation.start_time, start_time, reservation.duration) and SQLDatabase.is_at_least_X_days_apart(reservation.start_time, start_time, 0):
+			if reservation.status.status_code != FAILED_RESERVATION_STATUS_CODE and is_at_most_X_hours_apart(reservation.start_time, start_time, reservation.duration) and is_at_least_X_days_apart(reservation.start_time, start_time, 0):
 				batch_reservations.append(reservation)
 		return batch_reservations
-			
-	def is_same_day(date1: datetime, date2: datetime):
-		if date1.day == date2.day and date1.month == date2.month and date1.year == date2.year:
-			return True
-		return False
-	
-	def is_at_least_X_days_apart(date1: datetime, date2: datetime, x: int):
-		return ((date1.timestamp() - date2.timestamp()) >= 60*60*24*x)
 
 	def is_legal_order(self, user: User, reservation: Reservation) -> bool:
 		'''Returns if "user" is able to order the reservation on his name.
@@ -147,20 +153,20 @@ class SQLDatabase(Database):
 		- Someone already reserved it
 		- The user already reserved a room in the same day
 		- The user wants to make 3+ reservations in a window of a week'''
-		if reservation.owner is not None or not SQLDatabase.is_at_least_X_days_apart(reservation.start_time, datetime.now(), -1/24):
+		if reservation.owner is not None or not is_at_least_X_days_apart(reservation.start_time, datetime.now(), -1/NUM_HOURS_IN_DAY):
 			return False
 		user_reservations = self.load_reservations_of_user(user.user_id)
 		for user_reservation in user_reservations:
 			user_reservation_day = datetime.date(user_reservation.start_time)
 			reservation_day = datetime.date(reservation.start_time)
-			if SQLDatabase.is_same_day(user_reservation_day, reservation_day):
+			if is_same_day(user_reservation_day, reservation_day):
 				return False
 		week_window_counter = 0
 		for user_reservation in user_reservations:
-			if not SQLDatabase.is_at_least_X_days_apart(reservation.start_time, user_reservation.start_time, 7) or not SQLDatabase.is_at_least_X_days_apart(user_reservation.start_time, reservation.start_time, 7):
+			if not is_at_least_X_days_apart(reservation.start_time, user_reservation.start_time, 7) or not is_at_least_X_days_apart(user_reservation.start_time, reservation.start_time, 7):
 				week_window_counter += 1
 		for user_reservation in user_reservations:
-			if SQLDatabase.is_at_least_X_days_apart(datetime.now(), user_reservation.start_time , 7):
+			if is_at_least_X_days_apart(datetime.now(), user_reservation.start_time , 7):
 				self.delete_reservation(user_reservation)
 		if week_window_counter >= 2:
 			return False
@@ -182,7 +188,7 @@ class SQLDatabase(Database):
 		self.conn.commit()
 		
 	def make_new_reservation_id(self, reservation: Reservation):
-		return f"{INITIALIZING_PREFIX}{reservation.owner.user_id}{reservation.start_time.date().strftime('%Y.%m.%d')}"
+		return f"{INITIALIZING_PREFIX} {reservation.owner.user_id} {reservation.start_time.date().strftime('%Y.%m.%d')}"
 	
 	def is_new_reservation(self, reservation: Reservation):
 		res_id = reservation.reservation_id
@@ -227,10 +233,9 @@ class SQLDatabase(Database):
 		is_legal = False
 		user = User()
 		
-		TRIES = 500
 		counter = 0
 		
-		while not is_legal and counter < TRIES:
+		while not is_legal and counter < NUM_OWNER_TRIES:
 			user = self.choose_potential_owner()
 			is_legal = self.is_legal_order(user, reservation)
 			counter += 1

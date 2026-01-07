@@ -1,6 +1,6 @@
 import discord
 from discord import app_commands, ui
-from typing import Optional
+from typing import Optional, Callable
 from datetime import datetime, timedelta
 from constants import *
 from UI.md_styling import *
@@ -8,8 +8,10 @@ import json
 
 MAX_DAYS_FORWARD_DATE_OPTIONS = 14
 
-class AddMeModal(ui.Modal, title='📝 User Sign Up'):
-    def __init__(self, *, title = '📝 User Sign Up', signup_func = None):
+ADD_ME_TITLE = '📝 User Sign Up'
+
+class AddMeModal(ui.Modal, title=ADD_ME_TITLE):
+    def __init__(self, *, title = ADD_ME_TITLE, signup_func = None):
         super().__init__(title=title)
         self.signup_func = signup_func
 
@@ -60,7 +62,7 @@ def create_date_options() -> list[discord.SelectOption]:
     return options
 
 class ReservationStarter(ui.View):
-    def __init__(self, user_id: int, add_reservation_func):
+    def __init__(self, user_id: int, add_reservation_func: Callable[[str ,str, datetime, int, int], None]):
         super().__init__(timeout=300)
         self.user_id = user_id
         self.add_reservation_func = add_reservation_func
@@ -118,7 +120,7 @@ class ReservationStarter(ui.View):
 # STEP 2 VIEW: Final Details (Duration & Repeat)
 
 class ReservationFinisher(ui.View):
-    def __init__(self, user_id: int, room: str, date: str, time: int, add_reservation_func):
+    def __init__(self, user_id: int, room: str, date: str, time: int, add_reservation_func: Callable[[str ,str, datetime, int, int], None]):
         super().__init__(timeout=300)
         self.add_reservation_func = add_reservation_func
         self.user_id = user_id

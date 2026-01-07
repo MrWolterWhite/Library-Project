@@ -3,14 +3,13 @@ from datetime import datetime
 from DB.objects import *
 from DB.sql_database import *
 import requests
-import json
 import time
 from requests_toolbelt.multipart.encoder import MultipartEncoder
+from Reservations.library_website_api import login_to_library, load_new_library_reservation, load_existing_library_reservation, post_reservation_attributes, press_submit
 from constants import *
 
 OFFSET_IN_DAYS = 7
 
-AFTER_LOGIN = "https://schedule.tau.ac.il/scilib/Web/schedule.php"
 SUBMIT_SPAM_AMOUNT = 20
 SECONDS_IN_MINUTE = 60
 MINUTES_IN_HOURS = 60
@@ -59,50 +58,8 @@ def get_current_hour_for_reservation() -> datetime:
 	'''Returns the date of the following batch of reservations (closest hour 
 	plus a week, which is OFFSET_IN_DAYS days)'''
 	curr_time = datetime.now()
-	curr_time = datetime(curr_time.year, curr_time.month, curr_time.day, (curr_time.hour + 1) % 24, 0)
+	curr_time = datetime(curr_time.year, curr_time.month, curr_time.day, (curr_time.hour + 1) % NUM_HOURS_IN_DAY, 0)
 	return get_X_days_later(curr_time, OFFSET_IN_DAYS)
-
-def login_to_library(session: requests.Session, reservation: Reservation):
-	session.get("https://schedule.tau.ac.il/scilib/Web/index.php")
-	payload = {'email': reservation.owner.username,
-			'password': reservation.owner.password,
-			"captcha": "",
-			"login": "submit",
-			"resume": AFTER_LOGIN,
-			"language": "en_gb"}
-	session.post('https://schedule.tau.ac.il/scilib/Web/index.php', data=payload)
-
-def load_new_library_reservation(session: requests.Session, formatted_date: str = "", room_id: int = 0, isr_start_time: str = "", isr_end_time: str = "") -> tuple[str, int]:
-	response = session.get(f"https://schedule.tau.ac.il/scilib/Web/reservation/?rid={room_id}&sid=3&rd={formatted_date}&sd={formatted_date} {isr_start_time}&ed={formatted_date} {isr_end_time}")
-	csrf_token = response.text.split("const csrf")[1].split("\"")[1]
-	user_id = int(response.text.split("const userId = ")[1].split(";")[0])
-	session.headers.update({"X-Csrf-Token": csrf_token})
-	session.get(f"https://schedule.tau.ac.il/scilib/Web/api/reservation.php?api=load&sd={formatted_date}+{isr_start_time}&ed={formatted_date}+{isr_end_time}&sid=3&rid={room_id}&rd={formatted_date}&rn=&pid=&srn=")
-	return (csrf_token, user_id)
-
-def load_existing_library_reservation(session: requests.Session, reference_number: str = "") -> tuple[str, int]:
-	response = session.get(f"https://schedule.tau.ac.il/scilib/Web/reservation/?rn={reference_number}")
-	csrf_token = response.text.split("const csrf")[1].split("\"")[1]
-	user_id = int(response.text.split("const userId = ")[1].split(";")[0])
-	session.headers.update({"X-Csrf-Token": csrf_token})
-	session.get(f"https://schedule.tau.ac.il/scilib/Web/api/reservation.php?api=load&sd=&ed=&sid=&rid=&rd=&rn={reference_number}&pid=&srn=")
-	return (csrf_token, user_id)
-
-def post_reservation_attributes(session: requests.Session, formatted_date: str = "", room_id: int = 0, user_id: int = 0, etc_start_time: str = "", etc_end_time: str = "", duration: int = 0, reference_number: str = ""):
-	payload = {"referenceNumber":reference_number,"ownerId":user_id,"resourceIds":[room_id],"accessories":[],"title":None,"description":None,"start":f"{formatted_date}T{etc_start_time}.000Z","end":f"{formatted_date}T{etc_end_time}.000Z","recurrence":{"type":"none","interval":duration,"weekdays":None,"monthlyType":None,"weekOfMonth":None,"terminationDate":None,"repeatDates":[]},"startReminder":None,"endReminder":None,"inviteeIds":[],"coOwnerIds":[],"participantIds":[],"guestEmails":[],"participantEmails":[],"allowSelfJoin":False,"attachments":[],"requiresApproval":False,"checkinDate":None,"checkoutDate":None,"termsAcceptedDate":None,"attributeValues":[],"meetingLink":None,"displayColor":None,"browserTimezone":"Asia/Jerusalem"}
-	session.post('https://schedule.tau.ac.il/scilib/Web/api/reservation.php?api=attributes', json=payload)
-
-def press_submit(session: requests.Session, formatted_date: str = "", room_id: int = 0, user_id: int = 0, csrf_token: str = "", etc_start_time: str = "", etc_end_time: str = "", duration: int = 0, reference_number: str = "") -> str:
-	session.headers.update({"Accept": "application/json"})
-	payload = MultipartEncoder(
-		fields={"request": json.dumps({"reservation":{"referenceNumber":reference_number,"ownerId":user_id,"resourceIds":[room_id],"accessories":[],"title":None,"description":None,"start":f"{formatted_date}T{etc_start_time}.000Z","end":f"{formatted_date}T{etc_end_time}.000Z","recurrence":{"type":"none","interval":duration,"weekdays":None,"monthlyType":None,"weekOfMonth":None,"terminationDate":None,"repeatDates":[]},"startReminder":None,"endReminder":None,"inviteeIds":[],"coOwnerIds":[],"participantIds":[],"guestEmails":[],"participantEmails":[],"allowSelfJoin":False,"attachments":[],"requiresApproval":False,"checkinDate":None,"checkoutDate":None,"termsAcceptedDate":None,"attributeValues":[],"meetingLink":None,"displayColor":None,"browserTimezone":"Asia/Jerusalem"},"retryParameters":[],"updateScope":"full"}),
-				"CSRF_TOKEN": csrf_token,
-				"BROWSER_TIMEZONE": "Asia/Jerusalem"}
-	)
-	session.headers.update({"Content-Type": payload.content_type})
-
-	response_order = session.post("https://schedule.tau.ac.il/scilib/Web/api/reservation.php?action=create", data=payload)
-	return response_order.json()["data"]["referenceNumber"]
 
 def wait_for_last_second_of_minute():
 	is_time_to_submit = False
@@ -145,18 +102,18 @@ if __name__ == "__main__":
 					else:
 						return str(n)
 
-				isr_start_time = to_2_digits(reservation.start_time.hour) + ":00:00"
-				isr_end_time = to_2_digits(reservation.start_time.hour + reservation.status.reserved_duration + 1) + ":00:00"
+				israel_start_time = to_2_digits(reservation.start_time.hour) + ":00:00"
+				israel_end_time = to_2_digits(reservation.start_time.hour + reservation.status.reserved_duration + 1) + ":00:00"
 
 				TIME_DIFFERENCE = 2 #Should stay constant
-				etc_start_time = to_2_digits((int(isr_start_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
-				etc_end_time = to_2_digits((int(isr_end_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
+				etc_start_time = to_2_digits((int(israel_start_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
+				etc_end_time = to_2_digits((int(israel_end_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
 
 				formatted_date = f"{reservation.start_time.year}-{reservation.start_time.month}-{reservation.start_time.day}"
 				room_id = room_translation_dict[reservation.room.room_name]
 
 				login_to_library(session, reservation)
-				csrf_token, user_id = load_new_library_reservation(session, formatted_date, room_id, isr_start_time, isr_end_time)
+				csrf_token, user_id = load_new_library_reservation(session, formatted_date, room_id, israel_start_time, israel_end_time)
 				post_reservation_attributes(session, formatted_date, room_id, user_id, etc_start_time, etc_end_time, reservation.status.reserved_duration, "")
 				wait_for_last_second_of_minute()
 				for _ in range(SUBMIT_SPAM_AMOUNT):
@@ -177,12 +134,12 @@ if __name__ == "__main__":
 					else:
 						return str(n)
 
-				isr_start_time = to_2_digits(reservation.start_time.hour) + ":00:00"
-				isr_end_time = to_2_digits(reservation.start_time.hour + reservation.status.reserved_duration + 1) + ":00:00"
+				israel_start_time = to_2_digits(reservation.start_time.hour) + ":00:00"
+				israel_end_time = to_2_digits(reservation.start_time.hour + reservation.status.reserved_duration + 1) + ":00:00"
 
 				TIME_DIFFERENCE = 2 #Should stay constant
-				etc_start_time = to_2_digits((int(isr_start_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
-				etc_end_time = to_2_digits((int(isr_end_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
+				etc_start_time = to_2_digits((int(israel_start_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
+				etc_end_time = to_2_digits((int(israel_end_time.split(":")[0]) - TIME_DIFFERENCE)) + ":00:00"
 
 				formatted_date = f"{reservation.start_time.year}-{reservation.start_time.month}-{reservation.start_time.day}"
 				room_id = room_translation_dict[reservation.room.room_name]

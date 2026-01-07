@@ -43,7 +43,7 @@ if __name__ == "__main__":
                 return True
 
         async def add_reservation(discord_id: str = "", room_name: str = '', start_time: datetime = 
-            datetime(1970,1,1), duration: int = 0, repeat: int = 0):
+            datetime(1970,1,1), duration: int = 0, repeat: int = 0) -> bool:
             '''Creates a reservation object and updates the database. Makes sure to 
             update both the users and reservations database
             
